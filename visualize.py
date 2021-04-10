@@ -17,8 +17,9 @@ trainer = Trainer(cfgs, Unsup3D)
 run_train = cfgs.get('run_train', False)
 run_test = cfgs.get('run_test', False)
 
+data_loader = trainer.test_loader
+for x in data_loader:
+    print(x.shape)
 
 with torch.no_grad():
-    m = self.run_epoch(self.test_loader, epoch=self.current_epoch, is_test=True)
-
-trainer.model.
+    m = trainer.run_epoch(trainer.test_loader, is_test=True)

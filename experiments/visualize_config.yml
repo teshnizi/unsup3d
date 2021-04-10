@@ -11,7 +11,7 @@ num_workers: 4
 image_size: 64
 crop: 170
 load_gt_depth: false
-test_data_dir: data/cat_combined/test
+test_data_dir: data/visualize_data
 
 ## model
 model_name: unsup3d_cat
