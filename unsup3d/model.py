@@ -31,8 +31,14 @@ class Unsup3D():
         self.renderer = Renderer(cfgs)
 
         ## networks and optimizers
-        self.netD = networks.EDDeconv(cin=3, cout=1, nf=64, zdim=256, activation=None)
-        self.netA = networks.EDDeconv(cin=3, cout=3, nf=64, zdim=256)
+        if cfgs.get('use_vae', False):
+            self.netD = networks.EDDeconvVAE(cin=3, cout=1, nf=64, zdim=256, activation=None)
+            self.netA = networks.EDDeconvVAE(cin=3, cout=3, nf=64, zdim=256)
+            print('Using VAEs for Albedo and Depth!')
+        else:
+            self.netD = networks.EDDeconv(cin=3, cout=1, nf=64, zdim=256, activation=None)
+            self.netA = networks.EDDeconv(cin=3, cout=3, nf=64, zdim=256)
+
         self.netL = networks.Encoder(cin=3, cout=4, nf=32)
         self.netV = networks.Encoder(cin=3, cout=6, nf=32)
         self.netC = networks.ConfNet(cin=3, cout=2, nf=64, zdim=128)
