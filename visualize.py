@@ -2,6 +2,14 @@ import argparse
 import torch
 from unsup3d import setup_runtime, Trainer, Unsup3D
 
+from keras.applications.vgg16 import VGG16
+from keras.applications.vgg16 import preprocess_input
+from keras.preprocessing.image import load_img
+from keras.preprocessing.image import img_to_array
+from keras.models import Model
+from matplotlib import pyplot
+from numpy import expand_dims
+
 
 ## runtime arguments
 parser = argparse.ArgumentParser(description='Training configurations.')
@@ -27,31 +35,51 @@ print(f"Saving testing results to {trainer.test_result_dir}")
 # =================================================================================
 # =================================================================================
 
-
 is_train = False 
 is_test = not is_train
 
+# print(trainer.model.netA)
+
 with torch.no_grad():
     trainer.model.set_eval()
-    for iter, x in enumerate(trainer.test_loader):
-        # print(f'X: {x.shape}')
-        # m = trainer.model.forward(x)
+    for iter, image in enumerate(trainer.test_loader):
+        # print(f'image: {image.shape}')
+        # m = trainer.model.forward(image)
         # print(m)
         # if is_train:
         #     trainer.model.backward()
-    
-        input_im = x.to(trainer.model.device) *2.-1.
+
+
+        input_im = image.to(trainer.model.device) *2.-1.
         b, c, h, w = input_im.shape
-        canon_albedo = trainer.model.netA(input_im)  # Bx3xHxW
-        print(canon_albedo.shape)
 
-# data_loader = trainer.test_loader
-# model = trainer.model
-# netD = model.netD
-# netA = model.netA
-# netL = model.netL
-# netV = model.netV
-# netC = model.netC
+        x = input_im
 
-# print(netA)
-    
+        print(f'Input shape: {x.shape}\n------------------------')
+        for l in list(trainer.model.netA.network.children())[:-2]:
+            x = l(x)
+            print(l)
+            print(x.shape)
+            print('------------------------')
+
+        feature_maps = x.cpu()
+        print(feature_maps.shape)
+        square = 8
+        ix = 1
+        for _ in range(square):
+            for _ in range(square):
+                # specify subplot and turn of axis
+                ax = pyplot.subplot(square, square, ix)
+                ax.set_xticks([])
+                ax.set_yticks([])
+                # plot filter channel in grayscale
+                pyplot.imshow(feature_maps[0, :, :, ix-1])
+                ix += 1
+        # show the figure
+        pyplot.savefig('albedo.png')
+
+
+        # canon_albedo = trainer.model.netA(input_im)  # Bx3xHxW
+        # print(canon_albedo.shape)
+
+
