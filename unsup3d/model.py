@@ -33,8 +33,8 @@ class Unsup3D():
 
         ## networks and optimizers
         if self.use_vae:
-            self.netD = networks.EDDeconvVAE(cin=3, cout=1, nf=64, hdim=256, zdim=64, activation=None)
-            self.netA = networks.EDDeconvVAE(cin=3, cout=3, nf=64, hdim=256, zdim=64)
+            self.netD = networks.EDDeconvVAE(cin=3, cout=1, nf=64, hdim=256, zdim=128, activation=None)
+            self.netA = networks.EDDeconvVAE(cin=3, cout=3, nf=64, hdim=256, zdim=128)
             print('Using VAEs for Albedo and Depth!')
         else:
             self.netD = networks.EDDeconv(cin=3, cout=1, nf=64, zdim=256, activation=None)
