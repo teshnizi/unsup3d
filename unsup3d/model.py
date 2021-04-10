@@ -29,11 +29,12 @@ class Unsup3D():
         self.lr = cfgs.get('lr', 1e-4)
         self.load_gt_depth = cfgs.get('load_gt_depth', False)
         self.renderer = Renderer(cfgs)
+        self.use_vae = cfgs.get('use_vae', False)
 
         ## networks and optimizers
-        if cfgs.get('use_vae', False):
-            self.netD = networks.EDDeconvVAE(cin=3, cout=1, nf=64, zdim=256, activation=None)
-            self.netA = networks.EDDeconvVAE(cin=3, cout=3, nf=64, zdim=256)
+        if self.use_vae:
+            self.netD = networks.EDDeconvVAE(cin=3, cout=1, nf=64, hdim=256, zdim=128, activation=None)
+            self.netA = networks.EDDeconvVAE(cin=3, cout=3, nf=64, hdim=256, zdim=128)
             print('Using VAEs for Albedo and Depth!')
         else:
             self.netD = networks.EDDeconv(cin=3, cout=1, nf=64, zdim=256, activation=None)
@@ -126,7 +127,12 @@ class Unsup3D():
         b, c, h, w = self.input_im.shape
 
         ## predict canonical depth
-        self.canon_depth_raw = self.netD(self.input_im).squeeze(1)  # BxHxW
+        if self.use_vae:
+            self.canon_depth_raw, self.depth_mu, self.depth_logvar = self.netD(self.input_im)
+            self.canon_depth_raw = self.canon_depth_raw.squeeze(1)  # BxHxW
+        else:
+            self.canon_depth_raw = self.netD(self.input_im).squeeze(1)  # BxHxW
+
         self.canon_depth = self.canon_depth_raw - self.canon_depth_raw.view(b,-1).mean(1).view(b,1,1)
         self.canon_depth = self.canon_depth.tanh()
         self.canon_depth = self.depth_rescaler(self.canon_depth)
@@ -138,7 +144,11 @@ class Unsup3D():
         self.canon_depth = torch.cat([self.canon_depth, self.canon_depth.flip(2)], 0)  # flip
 
         ## predict canonical albedo
-        self.canon_albedo = self.netA(self.input_im)  # Bx3xHxW
+        if self.use_vae:
+            self.canon_albedo, self.albedo_mu, self.albedo_logvar = self.netA(self.input_im)  # Bx3xHxW
+        else:
+            self.canon_albedo = self.netA(self.input_im)  # Bx3xHxW
+
         self.canon_albedo = torch.cat([self.canon_albedo, self.canon_albedo.flip(3)], 0)  # flip
 
         ## predict confidence map
@@ -194,7 +204,15 @@ class Unsup3D():
         lam_flip = 1 if self.trainer.current_epoch < self.lam_flip_start_epoch else self.lam_flip
         self.loss_total = self.loss_l1_im + lam_flip*self.loss_l1_im_flip + self.lam_perc*(self.loss_perc_im + lam_flip*self.loss_perc_im_flip)
 
-        metrics = {'loss': self.loss_total}
+        if self.use_vae:
+            #Default coefficient: -0.5
+            self.loss_depth_KLD = -2 * torch.mean(1 + self.depth_logvar - self.depth_mu.pow(2) - self.depth_logvar.exp())
+            self.loss_albedo_KLD = -2 * torch.mean(1 + self.albedo_logvar - self.albedo_mu.pow(2) - self.albedo_logvar.exp())
+            
+            self.loss_total += self.loss_depth_KLD
+            self.loss_total += self.loss_albedo_KLD
+            
+        metrics = {'loss': self.loss_total, 'depth_KLD': self.loss_depth_KLD, 'albedo_KLD': self.loss_albedo_KLD}
 
         ## compute accuracy if gt depth is available
         if self.load_gt_depth:

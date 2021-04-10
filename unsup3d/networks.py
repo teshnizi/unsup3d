@@ -89,7 +89,7 @@ class EDDeconv(nn.Module):
 
 
 class EDDeconvVAE(nn.Module):
-    def __init__(self, cin, cout, zdim=128, nf=64, activation=nn.Tanh):
+    def __init__(self, cin, cout, zdim=128, hdim=128, nf=64, activation=nn.Tanh):
         super(EDDeconvVAE, self).__init__()
         ## downsampling
         enc_net = [
@@ -104,11 +104,21 @@ class EDDeconvVAE(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(nf*4, nf*8, kernel_size=4, stride=2, padding=1, bias=False),  # 8x8 -> 4x4
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(nf*8, zdim, kernel_size=4, stride=1, padding=0, bias=False),  # 4x4 -> 1x1
+            nn.Conv2d(nf*8, hdim, kernel_size=4, stride=1, padding=0, bias=False),  # 4x4 -> 1x1
             nn.ReLU(inplace=True)]
+        
+        ## mean sampling
+        self.mu_net = nn.Linear(hdim, zdim)
+
+        ## variance sampling
+        self.var_net = nn.Linear(hdim, zdim)
+
+        ## generating decoder hidden layer
+        self.agg_net = nn.Linear(zdim, hdim)
+        
         ## upsampling
         dec_net = [
-            nn.ConvTranspose2d(zdim, nf*8, kernel_size=4, stride=1, padding=0, bias=False),  # 1x1 -> 4x4
+            nn.ConvTranspose2d(hdim, nf*8, kernel_size=4, stride=1, padding=0, bias=False),  # 1x1 -> 4x4
             nn.ReLU(inplace=True),
             nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=False),
             nn.ReLU(inplace=True),
@@ -145,12 +155,33 @@ class EDDeconvVAE(nn.Module):
         self.enc_net = nn.Sequential(*enc_net)
         self.dec_net = nn.Sequential(*dec_net)
 
-    def forward(self, input):
-        embedding = self.enc_net(input)
-        print(embedding.shape)
-        output = self.dec_net(embedding)
-        print(output.shape)
-        return output
+
+    def reparameterize(self, mu, logvar):
+        std = logvar.mul(0.5).exp_()
+        esp = torch.randn(*mu.size()).cuda()
+        z = mu + std * esp
+        return z
+    
+    def bottleneck(self, h):
+        mu, logvar = self.mu_net(h), self.var_net(h)
+        z = self.reparameterize(mu, logvar)
+        return z, mu, logvar
+        
+    def representation(self, x):
+        return self.bottleneck(self.enc_net(x))[0]
+
+    def forward(self, x):
+        h = self.enc_net(x)
+        # print(f'H shape: {h.shape}')
+        h = h.squeeze(3).squeeze(2)
+        z, mu, logvar = self.bottleneck(h)
+        # print(f'Z shape: {z.shape}, mu shape: {mu.shape}, logvar shape: {logvar.shape}')
+        z = self.agg_net(z)
+        # print(f'Dec H shape: {z.shape}')
+        out = self.dec_net(z.unsqueeze(2).unsqueeze(3))
+        # print(out.shape)
+        return out, mu, logvar
+        
 
 
 class ConfNet(nn.Module):
