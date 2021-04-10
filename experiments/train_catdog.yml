@@ -9,6 +9,7 @@ keep_num_checkpoint: 2
 resume: true
 use_logger: true
 log_freq: 500
+use_vae: True 
 
 ## dataloader
 num_workers: 4
