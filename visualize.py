@@ -38,7 +38,7 @@ print(f"Saving testing results to {trainer.test_result_dir}")
 is_train = False 
 is_test = not is_train
 
-# print(trainer.model.netA)
+print(trainer.model.netA)
 
 with torch.no_grad():
     trainer.model.set_eval()
@@ -56,7 +56,7 @@ with torch.no_grad():
         x = input_im
 
         print(f'Input shape: {x.shape}\n------------------------')
-        for l in list(trainer.model.netA.network.children())[:-2]:
+        for l in list(trainer.model.netA.network.children())[:-12]:
             x = l(x)
             print(l)
             print(x.shape)
@@ -73,7 +73,7 @@ with torch.no_grad():
                 ax.set_xticks([])
                 ax.set_yticks([])
                 # plot filter channel in grayscale
-                pyplot.imshow(feature_maps[0, :, :, ix-1])
+                pyplot.imshow(feature_maps[0, ix-1, :, :])
                 ix += 1
         # show the figure
         pyplot.savefig('albedo.png')
