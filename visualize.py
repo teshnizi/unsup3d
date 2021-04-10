@@ -17,9 +17,41 @@ trainer = Trainer(cfgs, Unsup3D)
 run_train = cfgs.get('run_train', False)
 run_test = cfgs.get('run_test', False)
 
-data_loader = trainer.test_loader
-for x in data_loader:
-    print(x.shape)
+trainer.model.to_device(trainer.device)
+trainer.current_epoch = trainer.load_checkpoint(optim=False)
+if trainer.test_result_dir is None:
+    trainer.test_result_dir = os.path.join(trainer.checkpoint_dir, f'test_results_{trainer.checkpoint_name}'.replace('.pth',''))
+print(f"Saving testing results to {trainer.test_result_dir}")
+
+# =================================================================================
+# =================================================================================
+# =================================================================================
+
+
+is_train = False 
+is_test = not is_train
 
 with torch.no_grad():
-    m = trainer.run_epoch(trainer.test_loader, is_test=True)
+    trainer.model.set_eval()
+    for iter, x in enumerate(trainer.test_loader):
+        # print(f'X: {x.shape}')
+        # m = trainer.model.forward(x)
+        # print(m)
+        # if is_train:
+        #     trainer.model.backward()
+    
+        input_im = x.to(trainer.model.device) *2.-1.
+        b, c, h, w = input_im.shape
+        canon_albedo = trainer.model.netA(input_im)  # Bx3xHxW
+        print(canon_albedo.shape)
+
+# data_loader = trainer.test_loader
+# model = trainer.model
+# netD = model.netD
+# netA = model.netA
+# netL = model.netL
+# netV = model.netV
+# netC = model.netC
+
+# print(netA)
+    
