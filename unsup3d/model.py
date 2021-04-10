@@ -211,8 +211,11 @@ class Unsup3D():
             
             self.loss_total += self.loss_depth_KLD
             self.loss_total += self.loss_albedo_KLD
-            
-        metrics = {'loss': self.loss_total, 'depth_KLD': self.loss_depth_KLD, 'albedo_KLD': self.loss_albedo_KLD}
+        
+        metrics = {'loss': self.loss_total}
+
+        if self.use_vae:
+            metrics = {'loss': self.loss_total, 'depth_KLD': self.loss_depth_KLD, 'albedo_KLD': self.loss_albedo_KLD}
 
         ## compute accuracy if gt depth is available
         if self.load_gt_depth:
