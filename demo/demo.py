@@ -41,8 +41,13 @@ class Demo():
         self.K = K.unsqueeze(0)
 
         ## NN models
-        self.netD = EDDeconv(cin=3, cout=1, nf=64, zdim=256, activation=None)
-        self.netA = EDDeconv(cin=3, cout=3, nf=64, zdim=256)
+        if args.vae:
+            self.netD = EDDeconvVAE(cin=3, cout=1, nf=64, zdim=256, hdim=256, activation=None)
+            self.netA = EDDeconvVAE(cin=3, cout=3, nf=64, zdim=256, hdim=256)
+        else:
+            self.netD = EDDeconv(cin=3, cout=1, nf=64, zdim=256, activation=None)
+            self.netA = EDDeconv(cin=3, cout=3, nf=64, zdim=256)
+
         self.netL = Encoder(cin=3, cout=4, nf=32)
         self.netV = Encoder(cin=3, cout=6, nf=32)
 
@@ -144,7 +149,12 @@ class Demo():
             b, c, h, w = self.input_im.shape
 
             ## predict canonical depth
-            self.canon_depth_raw = self.netD(self.input_im).squeeze(1)  # BxHxW
+            if args.vae:
+                self.canon_depth_raw, self.depth_mu, self.depth_logvar = self.netD(self.input_im)
+                self.canon_depth_raw = self.canon_depth_raw.squeeze(1)  # BxHxW
+            else:
+                self.canon_depth_raw = self.netD(self.input_im).squeeze(1)  # BxHxW
+
             self.canon_depth = self.canon_depth_raw - self.canon_depth_raw.view(b,-1).mean(1).view(b,1,1)
             self.canon_depth = self.canon_depth.tanh()
             self.canon_depth = self.depth_rescaler(self.canon_depth)
@@ -155,8 +165,11 @@ class Demo():
             self.canon_depth = self.canon_depth*(1-depth_border) + depth_border *self.border_depth
 
             ## predict canonical albedo
-            self.canon_albedo = self.netA(self.input_im)  # Bx3xHxW
-
+            if args.vae:
+                self.canon_albedo, self.albedo_mu, self.albedo_logvar = self.netA(self.input_im)  # Bx3xHxW
+            else:
+                self.canon_albedo = self.netA(self.input_im)  # Bx3xHxW
+                
             ## predict lighting
             canon_light = self.netL(self.input_im)  # Bx4
             self.canon_light_a = canon_light[:,:1] /2+0.5  # ambience term
@@ -273,6 +286,7 @@ if __name__ == "__main__":
     parser.add_argument('--gpu', default=False, action='store_true', help='Enable GPU')
     parser.add_argument('--detect_human_face', default=False, action='store_true', help='Enable automatic human face detection. This does not detect cat faces.')
     parser.add_argument('--render_video', default=False, action='store_true', help='Render 3D animations to video')
+    parser.add_argument('--vae', default=False, action='store_true', help='Use VAE EDDeconvs')
     args = parser.parse_args()
 
     input_dir = args.input

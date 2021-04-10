@@ -206,8 +206,8 @@ class Unsup3D():
 
         if self.use_vae:
             #Default coefficient: -0.5
-            self.loss_depth_KLD = -2 * torch.mean(1 + self.depth_logvar - self.depth_mu.pow(2) - self.depth_logvar.exp())
-            self.loss_albedo_KLD = -2 * torch.mean(1 + self.albedo_logvar - self.albedo_mu.pow(2) - self.albedo_logvar.exp())
+            self.loss_depth_KLD = -30 * torch.mean(1 + self.depth_logvar - self.depth_mu.pow(2) - self.depth_logvar.exp())
+            self.loss_albedo_KLD = -30 * torch.mean(1 + self.albedo_logvar - self.albedo_mu.pow(2) - self.albedo_logvar.exp())
             
             self.loss_total += self.loss_depth_KLD
             self.loss_total += self.loss_albedo_KLD

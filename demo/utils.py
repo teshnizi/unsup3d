@@ -86,6 +86,104 @@ class EDDeconv(nn.Module):
         return self.network(input)
 
 
+
+class EDDeconvVAE(nn.Module):
+    def __init__(self, cin, cout, zdim=128, hdim=128, nf=64, activation=nn.Tanh):
+        super(EDDeconvVAE, self).__init__()
+        ## downsampling
+        enc_net = [
+            nn.Conv2d(cin, nf, kernel_size=4, stride=2, padding=1, bias=False),  # 64x64 -> 32x32
+            nn.GroupNorm(16, nf),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(nf, nf*2, kernel_size=4, stride=2, padding=1, bias=False),  # 32x32 -> 16x16
+            nn.GroupNorm(16*2, nf*2),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(nf*2, nf*4, kernel_size=4, stride=2, padding=1, bias=False),  # 16x16 -> 8x8
+            nn.GroupNorm(16*4, nf*4),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(nf*4, nf*8, kernel_size=4, stride=2, padding=1, bias=False),  # 8x8 -> 4x4
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(nf*8, hdim, kernel_size=4, stride=1, padding=0, bias=False),  # 4x4 -> 1x1
+            nn.ReLU(inplace=True)]
+        
+        ## mean sampling
+        self.mu_net = nn.Linear(hdim, zdim)
+
+        ## variance sampling
+        self.var_net = nn.Linear(hdim, zdim)
+
+        ## generating decoder hidden layer
+        self.agg_net = nn.Linear(zdim, hdim)
+        
+        ## upsampling
+        dec_net = [
+            nn.ConvTranspose2d(hdim, nf*8, kernel_size=4, stride=1, padding=0, bias=False),  # 1x1 -> 4x4
+            nn.ReLU(inplace=True),
+            nn.Conv2d(nf*8, nf*8, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(nf*8, nf*4, kernel_size=4, stride=2, padding=1, bias=False),  # 4x4 -> 8x8
+            nn.GroupNorm(16*4, nf*4),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(nf*4, nf*4, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.GroupNorm(16*4, nf*4),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(nf*4, nf*2, kernel_size=4, stride=2, padding=1, bias=False),  # 8x8 -> 16x16
+            nn.GroupNorm(16*2, nf*2),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(nf*2, nf*2, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.GroupNorm(16*2, nf*2),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(nf*2, nf, kernel_size=4, stride=2, padding=1, bias=False),  # 16x16 -> 32x32
+            nn.GroupNorm(16, nf),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.GroupNorm(16, nf),
+            nn.ReLU(inplace=True),
+            nn.Upsample(scale_factor=2, mode='nearest'),  # 32x32 -> 64x64
+            nn.Conv2d(nf, nf, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.GroupNorm(16, nf),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(nf, nf, kernel_size=5, stride=1, padding=2, bias=False),
+            nn.GroupNorm(16, nf),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(nf, cout, kernel_size=5, stride=1, padding=2, bias=False)]
+        
+        if activation is not None:
+            dec_net += [activation()]
+
+        self.enc_net = nn.Sequential(*enc_net)
+        self.dec_net = nn.Sequential(*dec_net)
+
+
+    def reparameterize(self, mu, logvar):
+        std = logvar.mul(0.5).exp_()
+        esp = torch.randn(*mu.size()).cuda()
+        z = mu + std * esp
+        return z
+    
+    def bottleneck(self, h):
+        mu, logvar = self.mu_net(h), self.var_net(h)
+        z = self.reparameterize(mu, logvar)
+        return z, mu, logvar
+        
+    def representation(self, x):
+        return self.bottleneck(self.enc_net(x))[0]
+
+    def forward(self, x):
+        h = self.enc_net(x)
+        # print(f'H shape: {h.shape}')
+        h = h.squeeze(3).squeeze(2)
+        z, mu, logvar = self.bottleneck(h)
+        # print(f'Z shape: {z.shape}, mu shape: {mu.shape}, logvar shape: {logvar.shape}')
+        z = self.agg_net(z)
+        # print(f'Dec H shape: {z.shape}')
+        out = self.dec_net(z.unsqueeze(2).unsqueeze(3))
+        # print(out.shape)
+        return out, mu, logvar
+        
+
+
+
 IMG_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif', '.tiff', 'webp')
 def is_image_file(filename):
     return filename.lower().endswith(IMG_EXTENSIONS)
