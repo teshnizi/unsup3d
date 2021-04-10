@@ -73,7 +73,7 @@ with torch.no_grad():
                 ax.set_xticks([])
                 ax.set_yticks([])
                 # plot filter channel in grayscale
-                pyplot.imshow(feature_maps[0, ix-1, :, :], cmap='gray' )
+                pyplot.imshow(feature_maps[0, ix-1, :, :])
                 ix += 1
         # show the figure
         pyplot.savefig('albedo.png')
